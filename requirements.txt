@@ -1,0 +1,10 @@
+# render_scan.py dependencies
+Pillow
+trimesh
+vedo
+numpy
+
+# FastAPI
+fastapi
+uvicorn[standard]
+python-multipart

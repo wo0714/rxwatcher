@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.env
+
+# Runtime data
+output/
+data/
+*.db
+
+# Sample/test data — large binary files
+sample_data/
+
+# Node — root level AND web/
+node_modules/
+web/node_modules/
+**/.next/
+web/.env.local
+
+# macOS
+.DS_Store

@@ -1,0 +1,285 @@
+/**
+ * web/app/globals.css
+ * RxWatcher global styles — dark navy + amber theme, matching CaseFinder.
+ * Uses CSS custom properties for consistent theming across all components.
+ *
+ * Copyright (c) 2026 Wayne Ohm / YC Lab. All rights reserved.
+ */
+
+/* ── RxWatcher global styles — dark navy + amber (matches CaseFinder) ── */
+
+:root {
+  --bg:        #0f172a;
+  --surface:   #1e293b;
+  --surface2:  #273449;
+  --border:    #334155;
+  --accent:    #f59e0b;
+  --accent-dim:#b45309;
+  --text:      #e2e8f0;
+  --muted:     #94a3b8;
+  --pass:      #22c55e;
+  --warn:      #f59e0b;
+  --flag:      #ef4444;
+  --radius:    8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+.header {
+  background: #0a1120;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.logo-icon { font-size: 22px; }
+.logo-accent { color: var(--accent); }
+.logo-sub {
+  color: var(--muted);
+  font-size: 12px;
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+
+/* ── Main content ── */
+.main-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* ── Section headings ── */
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+
+/* ── Upload zone ── */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--surface);
+}
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--accent);
+  background: #1e293b;
+}
+.upload-zone input[type=file] { display: none; }
+.upload-icon { font-size: 36px; margin-bottom: 12px; }
+.upload-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.upload-hint { color: var(--muted); font-size: 13px; }
+
+/* ── Progress / spinner ── */
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Status badges ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.badge-pass      { background: #14532d; color: var(--pass); }
+.badge-needs_review { background: #451a03; color: var(--warn); }
+.badge-flagged   { background: #450a0a; color: var(--flag); }
+
+/* ── Metadata grid ── */
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.meta-item {}
+.meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 2px;
+}
+.meta-value { font-size: 14px; color: var(--text); }
+
+/* ── Tooth pills ── */
+.tooth-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tooth-pill {
+  background: #1e3a5f;
+  color: #93c5fd;
+  border: 1px solid #2563eb44;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Quality flags ── */
+.flag-list { display: flex; flex-direction: column; gap: 8px; }
+.flag-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border-left: 3px solid;
+}
+.flag-critical { background: #1c0a0a; border-color: var(--flag); }
+.flag-warning  { background: #1c1000; border-color: var(--warn); }
+.flag-icon { flex-shrink: 0; margin-top: 1px; }
+.flag-code {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+/* ── All-views image ── */
+.all-views-img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  display: block;
+}
+
+/* ── Cases table ── */
+.cases-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cases-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.cases-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #1e293b;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.cases-table tr:last-child td { border-bottom: none; }
+.cases-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cases-table tbody tr:hover { background: var(--surface2); }
+.order-id { font-family: monospace; color: var(--accent); font-weight: 600; }
+.patient-name { font-weight: 500; }
+.muted-text { color: var(--muted); }
+
+/* ── Search ── */
+.search-wrap { margin-bottom: 16px; }
+.search-input {
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 14px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--muted); }
+
+/* ── Back link ── */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  margin-bottom: 24px;
+  transition: color 0.15s;
+}
+.back-link:hover { color: var(--text); }
+
+/* ── Notes box ── */
+.notes-box {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: pre-wrap;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  line-height: 1.7;
+}
+
+/* ── Utility ── */
+.gap-section { margin-top: 32px; }
+.empty-state { color: var(--muted); text-align: center; padding: 48px 0; }
