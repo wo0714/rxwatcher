@@ -130,6 +130,7 @@ def parse_rx_xml(folder):
             'upper_working':      {'ply': None, 'texture': None},
             'upper_pretreatment': {'ply': None, 'texture': None},
             'lower_working':      {'ply': None, 'texture': None},
+            'lower_pretreatment': {'ply': None, 'texture': None},
         },
     }
 
@@ -210,8 +211,10 @@ def parse_rx_xml(folder):
                 key = 'upper_working'
             elif jaw_id == 'upper' and sub_type == 'PreTreatment_Jaw':
                 key = 'upper_pretreatment'
-            elif jaw_id == 'lower':
+            elif jaw_id == 'lower' and sub_type == 'Jaw':
                 key = 'lower_working'
+            elif jaw_id == 'lower' and sub_type == 'PreTreatment_Jaw':
+                key = 'lower_pretreatment'
             else:
                 continue
 
@@ -508,6 +511,7 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
                 'upper_working':      {'ply': None, 'texture': None},
                 'upper_pretreatment': {'ply': None, 'texture': None},
                 'lower_working':      {'ply': None, 'texture': None},
+                'lower_pretreatment': {'ply': None, 'texture': None},
             },
         }
         order_id = os.path.basename(folder)
@@ -515,28 +519,64 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
     # ── Resolve file paths ────────────────────────────────────────────────────
     sf = rx['scan_files']
 
-    # Prefer working scan (without_ditch) for upper; fall back to pretreatment
-    upper_ply = sf['upper_working']['ply'] or sf['upper_pretreatment']['ply']
-    upper_tex = sf['upper_working']['texture'] or sf['upper_pretreatment']['texture']
-    lower_ply = sf['lower_working']['ply']
-    lower_tex = sf['lower_working']['texture']
+    # Prefer working scan (without_ditch) for both jaws; fall back to pretreatment.
+    # IMPORTANT: XML SubType can be unreliable — validate by filename.
+    # 'pretreatment' in the filename = pre-op scan, NOT the prepped one.
+    # 'without_ditch' in the filename = working (prepped) scan.
+    def _pick_working(working_entry, pretreat_entry, jaw_label):
+        """Return (working_ply, working_tex, pretreat_ply, pretreat_tex)."""
+        w_ply = working_entry.get('ply')
+        w_tex = working_entry.get('texture')
+        p_ply = pretreat_entry.get('ply')
+        p_tex = pretreat_entry.get('texture')
+
+        # If the "working" file has 'pretreatment' in its name, the XML lied — swap them
+        if w_ply and 'pretreatment' in os.path.basename(w_ply).lower():
+            w_ply, p_ply = p_ply, w_ply
+            w_tex, p_tex = p_tex, w_tex
+            if w_ply:
+                print(f"  ⚠  {jaw_label}: XML mismapped pretreatment as working — corrected by filename")
+
+        return w_ply or p_ply, w_tex or p_tex, p_ply, p_tex
+
+    upper_ply, upper_tex, upper_pretx_ply, upper_pretx_tex = _pick_working(
+        sf['upper_working'], sf['upper_pretreatment'], 'Upper')
+    lower_ply, lower_tex, lower_pretx_ply, lower_pretx_tex = _pick_working(
+        sf['lower_working'], sf.get('lower_pretreatment', {}), 'Lower')
 
     # Last resort: scan folder for any upper/lower .ply files
     if not upper_ply:
         candidates = sorted(glob.glob(os.path.join(folder, '*upper*.ply')))
-        upper_ply  = next((f for f in candidates if 'without_ditch' in f), None) or (candidates[0] if candidates else None)
+        # Prefer without_ditch (working/prepped), avoid pretreatment
+        upper_ply = next((f for f in candidates if 'without_ditch' in f), None) \
+                    or next((f for f in candidates if 'pretreatment' not in f), None) \
+                    or (candidates[0] if candidates else None)
     if not lower_ply:
         candidates = sorted(glob.glob(os.path.join(folder, '*lower*.ply')))
-        lower_ply  = candidates[0] if candidates else None
+        lower_ply = next((f for f in candidates if 'without_ditch' in f), None) \
+                    or next((f for f in candidates if 'pretreatment' not in f), None) \
+                    or (candidates[0] if candidates else None)
+
+    # Track pretreatment files separately (for 3D viewer Pre-Tx toggle)
+    if not upper_pretx_ply:
+        candidates = sorted(glob.glob(os.path.join(folder, '*upper*pretreatment*.ply')))
+        upper_pretx_ply = candidates[0] if candidates else None
+    if not lower_pretx_ply:
+        candidates = sorted(glob.glob(os.path.join(folder, '*lower*pretreatment*.ply')))
+        lower_pretx_ply = candidates[0] if candidates else None
 
     if not upper_ply:
         print('\nError: Could not find upper jaw PLY file.')
         sys.exit(1)
 
     print(f"\n── Scan files ────────────────────────────────────────────────────────")
-    print(f"  Upper  : {os.path.basename(upper_ply)}")
-    print(f"  Texture: {os.path.basename(upper_tex) if upper_tex else '(none)'}")
-    print(f"  Lower  : {os.path.basename(lower_ply) if lower_ply else '(skipped)'}")
+    print(f"  Upper (working)  : {os.path.basename(upper_ply)}")
+    print(f"  Upper texture    : {os.path.basename(upper_tex) if upper_tex else '(none)'}")
+    if upper_pretx_ply:
+        print(f"  Upper (pre-tx)   : {os.path.basename(upper_pretx_ply)}")
+    print(f"  Lower (working)  : {os.path.basename(lower_ply) if lower_ply else '(skipped)'}")
+    if lower_pretx_ply:
+        print(f"  Lower (pre-tx)   : {os.path.basename(lower_pretx_ply)}")
 
     # ── Load meshes ───────────────────────────────────────────────────────────
     print(f"\n── Loading meshes ────────────────────────────────────────────────────")
@@ -611,16 +651,21 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
         prep_hflip = False
 
     # Palatal (upper) vs Lingual/Occlusal (lower)
-    # Upper palatal: camera below arch looking up  → (cz - d_arch), hflip=False
-    # Lower lingual: camera above arch looking down → (cz + d_arch), hflip=True
+    # Upper palatal: camera below arch looking up  → (cz - d_arch)
+    # Lower lingual: camera above arch looking down → (cz + d_arch)
     if prep_jaw == 'lower':
         pal_ling_label = 'Arch — Lingual / Occlusal'
         pal_ling_cam   = (cx, cy, cz + d_arch)
-        pal_ling_hflip = True
+        pal_ling_hflip = False
     else:
         pal_ling_label = 'Arch — Palatal'
         pal_ling_cam   = (cx, cy, cz - d_arch)
         pal_ling_hflip = False
+
+    # Up vector for pal_ling view:
+    # Upper palatal (camera below): anterior at top → up = (0, -1, 0)
+    # Lower lingual (camera above): anterior at bottom → up = (0, 1, 0)
+    pal_ling_up = (0, 1, 0) if prep_jaw == 'lower' else (0, -1, 0)
 
     # HI_RES applied to pal_ling and prep_occlusal for detailed margin review.
     # prep_occlusal uses a narrower FOV (25°) to zoom into the prep region;
@@ -634,11 +679,11 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
         ('buccal', buccal_label,
          buccal_cam,       (cx, cy, cz),    (0, 0, 1),  40, False,         True,  STD),
 
-        ('anterior', 'Arch — Anterior',
-         (cx, cy-d_arch, cz), (cx, cy, cz), (0, 0, 1),  40, False,         True,  STD),
+       ('anterior', 'Arch — Anterior',
+         (cx, cy - d_arch * 2.5, cz), (cx, cy, cz), (0, 0, 1),  16, False,         True,  STD),
 
         ('pal_ling', pal_ling_label,
-         pal_ling_cam,     (cx, cy, cz),    (0, -1, 0), 38, pal_ling_hflip, False, HI),
+         pal_ling_cam,     (cx, cy, cz),    pal_ling_up, 38, pal_ling_hflip, False, HI),
 
         ('prep_occlusal', f'Prep — Occlusal ({prep_label})',
          prep_cam,         (bcx, bcy, bcz), prep_up,    25, prep_hflip,     False, HI),
@@ -713,10 +758,14 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
         'order':          rx['order'],
         'prescription':   rx['prescription'],
         'scan_files': {
-            'upper_ply':     os.path.basename(upper_ply) if upper_ply else None,
-            'upper_texture': os.path.basename(upper_tex) if upper_tex else None,
-            'lower_ply':     os.path.basename(lower_ply) if lower_ply else None,
-            'lower_texture': os.path.basename(lower_tex) if lower_tex else None,
+            'upper_ply':         os.path.basename(upper_ply) if upper_ply else None,
+            'upper_texture':     os.path.basename(upper_tex) if upper_tex else None,
+            'lower_ply':         os.path.basename(lower_ply) if lower_ply else None,
+            'lower_texture':     os.path.basename(lower_tex) if lower_tex else None,
+            'upper_pretreat_ply': os.path.basename(sf['upper_pretreatment']['ply'])
+                                  if sf['upper_pretreatment']['ply'] else None,
+            'lower_pretreat_ply': os.path.basename(sf['lower_pretreatment']['ply'])
+                                  if sf['lower_pretreatment']['ply'] else None,
         },
         'prep_jaw': prep_jaw,
         'quality': {

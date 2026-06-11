@@ -137,3 +137,12 @@ def get_case(order_id: str) -> dict | None:
             'SELECT * FROM cases WHERE order_id = ?', (order_id,)
         ).fetchone()
     return _row_to_dict(row) if row else None
+
+
+'use client'
+
+
+def delete_case(order_id: str):
+    with _conn() as con:
+        con.execute('DELETE FROM cases WHERE order_id = ?', (order_id,))
+        con.commit()

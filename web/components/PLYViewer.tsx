@@ -130,8 +130,10 @@ function PLYError({ onClose }: { onClose: () => void }) {
 
 // ── Main viewer ───────────────────────────────────────────────────────────────
 export type PLYViewerProps = {
-  upperUrl:   string | null
-  lowerUrl:   string | null
+  upperUrl:           string | null
+  lowerUrl:           string | null
+  upperPretreatUrl?:  string | null   // pre-treatment upper (if available)
+  lowerPretreatUrl?:  string | null   // pre-treatment lower (if available)
   onClose:    () => void
   orderId?:   string
   prepTeeth?: number[]
@@ -139,15 +141,22 @@ export type PLYViewerProps = {
 }
 
 export default function PLYViewer({
-  upperUrl, lowerUrl, onClose,
-  orderId, prepTeeth = [], prepJaw,
+  upperUrl, lowerUrl,
+  upperPretreatUrl = null, lowerPretreatUrl = null,
+  onClose, orderId, prepTeeth = [], prepJaw,
 }: PLYViewerProps) {
   const [showUpper,      setShowUpper]      = useState(true)
   const [showLower,      setShowLower]      = useState(true)
   const [textured,       setTextured]       = useState(true)
-  const [lightIntensity, setLightIntensity] = useState(1.9)  // 50% of 0.3–3.5 range
+  const [lightIntensity, setLightIntensity] = useState(1.9)
   const [loadError,      setLoadError]      = useState(false)
+  const [scanVersion,    setScanVersion]    = useState<'prepped' | 'pretx'>('prepped')
   const controlsRef = useRef<any>(null)
+
+  const hasPretreat = !!(upperPretreatUrl || lowerPretreatUrl)
+  // Switch between working (prepped) and pretreatment scans
+  const activeUpperUrl = (scanVersion === 'pretx' && upperPretreatUrl) ? upperPretreatUrl : upperUrl
+  const activeLowerUrl = (scanVersion === 'pretx' && lowerPretreatUrl) ? lowerPretreatUrl : lowerUrl
 
   useEffect(() => {
     const url = upperUrl ?? lowerUrl
@@ -220,6 +229,13 @@ export default function PLYViewer({
         <TBtn active={textured}  onClick={() => setTextured(true)}>On</TBtn>
         <TBtn active={!textured} onClick={() => setTextured(false)}>Off</TBtn>
 
+        {hasPretreat && <>
+          <Sep />
+          <span style={{ color: 'var(--muted)', fontSize: 11 }}>SCAN</span>
+          <TBtn active={scanVersion === 'prepped'} onClick={() => setScanVersion('prepped')}>Prepped</TBtn>
+          <TBtn active={scanVersion === 'pretx'}   onClick={() => setScanVersion('pretx')}>Pre-Tx</TBtn>
+        </>}
+
         <Sep />
 
         <span style={{ color: 'var(--muted)', fontSize: 11 }}>LIGHT</span>
@@ -257,8 +273,8 @@ export default function PLYViewer({
           <directionalLight position={[40,  60,  20]} intensity={lightIntensity * 0.3} />
           <directionalLight position={[-40,-20, -20]} intensity={lightIntensity * 0.1} />
 
-          {upperUrl && <Suspense fallback={null}><ScanMesh url={upperUrl} textured={textured} visible={showUpper} /></Suspense>}
-          {lowerUrl && <Suspense fallback={null}><ScanMesh url={lowerUrl} textured={textured} visible={showLower} /></Suspense>}
+          {upperUrl && <Suspense fallback={null}><ScanMesh url={activeUpperUrl!} textured={textured} visible={showUpper} /></Suspense>}
+          {lowerUrl && <Suspense fallback={null}><ScanMesh url={activeLowerUrl!} textured={textured} visible={showLower} /></Suspense>}
 
           <CameraSetup controlsRef={controlsRef} />
 
