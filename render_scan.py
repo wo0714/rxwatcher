@@ -380,42 +380,75 @@ def analyze_quality(up_verts, up_faces, up_colors, rx_data, rendered_arrays):
 def get_prep_region(verts, fdi_teeth, prep_jaw='upper'):
     """
     Estimate the centroid of the prep region from FDI tooth numbers.
-    iTero X axis: negative = patient RIGHT (FDI 1x/4x), positive = patient LEFT (FDI 2x/3x).
-    prep_jaw: 'upper' or 'lower' — determines which Z end is the occlusal surface.
+
+    Strategy:
+      1. Filter vertices to the correct X side (patient left/right).
+      2. Use the tooth unit digit (1–8) to estimate Y position along the arch.
+         No broad anterior/posterior split — instead interpolate within the
+         actual Y range of the filtered vertices.
+      3. Take a narrow Y band around the estimated position and compute centroid.
+      4. Z is set to the occlusal surface using the 85th/15th percentile.
+
+    This handles single crowns, bridges, and multi-quadrant cases.
     """
     if not fdi_teeth:
         return verts.mean(axis=0)
 
     quadrants  = {t // 10 for t in fdi_teeth}
-    right_side = bool(quadrants & {1, 4})
-    left_side  = bool(quadrants & {2, 3})
+    right_side = bool(quadrants & {1, 4})   # patient right = negative X
+    left_side  = bool(quadrants & {2, 3})   # patient left  = positive X
 
+    # ── Step 1: X filter ──────────────────────────────────────────────────────
     mask = np.ones(len(verts), dtype=bool)
     if right_side and not left_side:
         mask &= verts[:, 0] < 0
     elif left_side and not right_side:
         mask &= verts[:, 0] > 0
-
-    # Anterior/posterior filter by tooth unit digit (4-8 = posterior)
-    tooth_units = [t % 10 for t in fdi_teeth]
-    if all(u >= 4 for u in tooth_units):
-        mask &= verts[:, 1] > -5     # posterior
-    elif all(u <= 3 for u in tooth_units):
-        mask &= verts[:, 1] < 5      # anterior
+    # Both sides (e.g., #12 + #22) → no X filter, centroid near midline
 
     region = verts[mask]
     if len(region) < 100:
         return verts.mean(axis=0)
 
-    cx, cy = region[:, :2].mean(axis=0)
+    # ── Step 2: estimate Y target from tooth unit digits ──────────────────────
+    # Tooth unit digit maps to approximate position along the arch:
+    #   1 (central incisor) → most anterior (low Y percentile)
+    #   8 (3rd molar)       → most posterior (high Y percentile)
+    # We interpolate within the actual Y range of the filtered vertices.
+    TOOTH_Y_PCT = {
+        1: 0.05,   # central incisor — most anterior
+        2: 0.12,   # lateral incisor
+        3: 0.25,   # canine
+        4: 0.40,   # 1st premolar
+        5: 0.55,   # 2nd premolar
+        6: 0.70,   # 1st molar
+        7: 0.85,   # 2nd molar
+        8: 0.95,   # 3rd molar — most posterior
+    }
 
-    # Target the actual biting/occlusal surface, not the jaw body centroid.
-    # Upper jaw: occlusal surface = LOW Z end  (arch opens downward, biting surface faces down)
-    # Lower jaw: occlusal surface = HIGH Z end (arch opens upward,  biting surface faces up)
+    unit_digits = [t % 10 for t in fdi_teeth]
+    avg_pct = np.mean([TOOTH_Y_PCT.get(u, 0.5) for u in unit_digits])
+
+    y_min, y_max = region[:, 1].min(), region[:, 1].max()
+    target_y = y_min + (y_max - y_min) * avg_pct
+
+    # ── Step 3: narrow Y band around target ───────────────────────────────────
+    # Band width scales with arch depth; ~15% of Y range gives a 2–3 tooth window.
+    band_half = (y_max - y_min) * 0.12
+    y_mask = (region[:, 1] > target_y - band_half) & (region[:, 1] < target_y + band_half)
+    narrow = region[y_mask]
+
+    if len(narrow) < 50:
+        # Fallback: use broader region
+        narrow = region
+
+    cx, cy = narrow[:, :2].mean(axis=0)
+
+    # ── Step 4: Z → occlusal surface ─────────────────────────────────────────
     if prep_jaw == 'upper':
-        cz = np.percentile(region[:, 2], 15)   # low end = occlusal surface of upper arch
+        cz = np.percentile(narrow[:, 2], 15)
     else:
-        cz = np.percentile(region[:, 2], 85)   # high end = occlusal surface of lower arch
+        cz = np.percentile(narrow[:, 2], 85)
 
     return np.array([cx, cy, cz])
 
@@ -679,8 +712,8 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
         ('buccal', buccal_label,
          buccal_cam,       (cx, cy, cz),    (0, 0, 1),  40, False,         True,  STD),
 
-       ('anterior', 'Arch — Anterior',
-         (cx, cy - d_arch * 2.5, cz), (cx, cy, cz), (0, 0, 1),  16, False,         True,  STD),
+        ('anterior', 'Arch — Anterior',
+         (cx, cy-d_arch, cz), (cx, cy, cz), (0, 0, 1),  40, False,         True,  STD),
 
         ('pal_ling', pal_ling_label,
          pal_ling_cam,     (cx, cy, cz),    pal_ling_up, 38, pal_ling_hflip, False, HI),

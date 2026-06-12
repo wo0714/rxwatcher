@@ -24,7 +24,7 @@ mkdir -p "$ROOT/data/scans" "$ROOT/data/output"
 
 # Start FastAPI in background
 echo "▶  FastAPI  → http://localhost:8000"
-uvicorn processor.api:app --reload --port 8000 &
+uvicorn processor.api:app --reload --port 8000 --host 0.0.0.0 &
 FASTAPI_PID=$!
 
 # Start Next.js
