@@ -462,9 +462,15 @@ def build_vedo_mesh(verts, faces, colors, textured):
     if textured and colors is not None:
         vm.pointdata['RGB'] = colors
         vm.pointdata.select('RGB')
-        vm.lighting('off')
+        vm.lighting('off')       # flat — preserves true scan colours
     else:
-        vm.color([215, 205, 190]).lighting('default')
+        vm.color([210, 200, 185])
+        vm.lighting('default')
+        prop = vm.properties
+        prop.SetAmbient(0.35)    # enough base visibility from any angle
+        prop.SetDiffuse(0.65)    # directional shading for surface relief
+        prop.SetSpecular(0.12)   # subtle highlight along edges
+        prop.SetSpecularPower(15)
     return vm
 
 

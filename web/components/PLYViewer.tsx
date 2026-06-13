@@ -31,8 +31,8 @@ function ScanMesh({ url, textured, visible }: {
   const material = useMemo(
     () => new THREE.MeshStandardMaterial({
       vertexColors: textured,
-      color:     textured ? undefined : new THREE.Color(0.52, 0.49, 0.46),
-      roughness: 0.82,
+      color:     textured ? undefined : new THREE.Color(0.55, 0.52, 0.48),
+      roughness: textured ? 0.82 : 0.55,
       metalness: 0.0,
       side:      THREE.DoubleSide,
     }),
@@ -268,10 +268,10 @@ export default function PLYViewer({
           style={{ background: '#080f1e' }}
           gl={{ antialias: true }}
         >
-          <ambientLight intensity={lightIntensity * 0.28} />
+          <ambientLight intensity={lightIntensity * 0.15} />
           <HeadLight intensity={lightIntensity} />
-          <directionalLight position={[40,  60,  20]} intensity={lightIntensity * 0.3} />
-          <directionalLight position={[-40,-20, -20]} intensity={lightIntensity * 0.1} />
+          <directionalLight position={[40,  60,  20]} intensity={lightIntensity * 0.4} />
+          <directionalLight position={[-40,-20, -20]} intensity={lightIntensity * 0.08} />
 
           {upperUrl && <Suspense fallback={null}><ScanMesh url={activeUpperUrl!} textured={textured} visible={showUpper} /></Suspense>}
           {lowerUrl && <Suspense fallback={null}><ScanMesh url={activeLowerUrl!} textured={textured} visible={showLower} /></Suspense>}
