@@ -1,19 +1,16 @@
 """
 processor/db.py
 RxWatcher SQLite database layer.
-Handles case storage and retrieval using Python stdlib sqlite3.
+Handles case storage, clinic mappings, and retrieval.
 No ORM — intentionally lightweight for a local-first application.
 
 Copyright (c) 2026 Wayne Ohm / YC Lab. All rights reserved.
 """
 
-"""
-RxWatcher — SQLite database layer
-Simple sqlite3 wrapper (no ORM needed for this use case).
-"""
-
 import json
+import re
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / 'data' / 'rxwatcher.db'
@@ -33,6 +30,7 @@ def init_db():
                 patient         TEXT,
                 doctor          TEXT,
                 clinic_address  TEXT,
+                clinic_name     TEXT,
                 procedure       TEXT,
                 prep_teeth_fdi  TEXT,
                 bridge_region   TEXT,
@@ -50,11 +48,23 @@ def init_db():
             )
         ''')
 
+        con.execute('''
+            CREATE TABLE IF NOT EXISTS clinic_mappings (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                address_key     TEXT UNIQUE NOT NULL,
+                nas_folder      TEXT NOT NULL,
+                practice_name   TEXT,
+                doctor_license  TEXT,
+                created_at      TEXT
+            )
+        ''')
+
         # ── Migrations: add columns that may be missing from older DBs ────────
         existing = {row[1] for row in con.execute('PRAGMA table_info(cases)')}
         for col, typedef in [
             ('scan_folder', 'TEXT'),
             ('prep_jaw',    'TEXT'),
+            ('clinic_name', 'TEXT'),
         ]:
             if col not in existing:
                 con.execute(f'ALTER TABLE cases ADD COLUMN {col} {typedef}')
@@ -62,6 +72,10 @@ def init_db():
 
         con.commit()
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cases
+# ─────────────────────────────────────────────────────────────────────────────
 
 def upsert_case(result: dict):
     o  = result.get('order', {})
@@ -72,14 +86,15 @@ def upsert_case(result: dict):
     with _conn() as con:
         con.execute('''
             INSERT INTO cases VALUES (
-                :order_id, :patient, :doctor, :clinic_address, :procedure,
-                :prep_teeth_fdi, :bridge_region, :prep_jaw,
+                :order_id, :patient, :doctor, :clinic_address, :clinic_name,
+                :procedure, :prep_teeth_fdi, :bridge_region, :prep_jaw,
                 :due_date, :export_time, :notes,
                 :quality_status, :quality_flags,
                 :output_folder, :scan_folder, :all_views_img, :processed_at, :raw_result
             )
             ON CONFLICT(order_id) DO UPDATE SET
                 patient        = excluded.patient,
+                clinic_name    = excluded.clinic_name,
                 quality_status = excluded.quality_status,
                 quality_flags  = excluded.quality_flags,
                 scan_folder    = excluded.scan_folder,
@@ -91,6 +106,7 @@ def upsert_case(result: dict):
             'patient':        o.get('patient', ''),
             'doctor':         o.get('doctor', ''),
             'clinic_address': o.get('clinic_address', ''),
+            'clinic_name':    result.get('clinic_name', ''),
             'procedure':      o.get('procedure', ''),
             'prep_teeth_fdi': json.dumps(p.get('prep_teeth_fdi', [])),
             'bridge_region':  json.dumps(p.get('bridge_region_fdi', [])),
@@ -139,10 +155,73 @@ def get_case(order_id: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
-'use client'
-
-
 def delete_case(order_id: str):
     with _conn() as con:
         con.execute('DELETE FROM cases WHERE order_id = ?', (order_id,))
+        con.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Clinic Mappings
+# ─────────────────────────────────────────────────────────────────────────────
+
+def normalize_address(address: str) -> str:
+    """
+    Normalize a ship-to address for consistent lookup.
+    Strips whitespace, lowercases, removes punctuation and common suffixes.
+    """
+    addr = address.lower().strip()
+    addr = re.sub(r'[,.\-#]', ' ', addr)    # remove punctuation
+    addr = re.sub(r'\s+', ' ', addr)         # collapse whitespace
+    # Remove common suffixes that vary between entries
+    for noise in ['canada', 'alberta', 'ab']:
+        addr = addr.replace(noise, '')
+    return addr.strip()
+
+
+def get_clinic_mapping(address: str) -> dict | None:
+    """Look up a clinic NAS folder by ship-to address."""
+    key = normalize_address(address)
+    with _conn() as con:
+        row = con.execute(
+            'SELECT * FROM clinic_mappings WHERE address_key = ?', (key,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def save_clinic_mapping(address: str, nas_folder: str, practice_name: str = '',
+                        doctor_license: str = '') -> dict:
+    """Create or update a clinic mapping."""
+    key = normalize_address(address)
+    with _conn() as con:
+        con.execute('''
+            INSERT INTO clinic_mappings (address_key, nas_folder, practice_name,
+                                         doctor_license, created_at)
+            VALUES (:key, :folder, :practice, :license, :ts)
+            ON CONFLICT(address_key) DO UPDATE SET
+                nas_folder     = excluded.nas_folder,
+                practice_name  = excluded.practice_name,
+                doctor_license = excluded.doctor_license
+        ''', {
+            'key':      key,
+            'folder':   nas_folder,
+            'practice': practice_name,
+            'license':  doctor_license,
+            'ts':       datetime.utcnow().isoformat() + 'Z',
+        })
+        con.commit()
+    return {'address_key': key, 'nas_folder': nas_folder, 'practice_name': practice_name}
+
+
+def get_all_clinic_mappings() -> list[dict]:
+    with _conn() as con:
+        rows = con.execute(
+            'SELECT * FROM clinic_mappings ORDER BY nas_folder'
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_clinic_mapping(mapping_id: int):
+    with _conn() as con:
+        con.execute('DELETE FROM clinic_mappings WHERE id = ?', (mapping_id,))
         con.commit()

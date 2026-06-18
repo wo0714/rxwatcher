@@ -16,6 +16,13 @@ fi
 
 source "$ROOT/.venv/bin/activate"
 
+# Load environment variables
+if [ -f "$ROOT/.env" ]; then
+  set -a
+  source "$ROOT/.env"
+  set +a
+fi
+
 # Install Python deps if needed
 pip install -q -r "$ROOT/requirements.txt"
 
@@ -24,7 +31,7 @@ mkdir -p "$ROOT/data/scans" "$ROOT/data/output"
 
 # Start FastAPI in background
 echo "▶  FastAPI  → http://localhost:8000"
-uvicorn processor.api:app --reload --port 8000 --host 0.0.0.0 &
+uvicorn processor.api:app --reload --port 8000 &
 FASTAPI_PID=$!
 
 # Start Next.js
