@@ -29,6 +29,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="logo-text">Rx<span className="logo-accent">Watcher</span></span>
             </Link>
             <span className="logo-sub">YC Lab · Scan Review</span>
+            <Link href="/clinics" style={{
+              marginLeft: 'auto', fontSize: 12, color: 'var(--muted)',
+              textDecoration: 'none', padding: '4px 10px',
+              border: '1px solid var(--border)', borderRadius: 5,
+            }}>
+              🏥 Clinics
+            </Link>
           </div>
         </header>
         <main className="main-content">

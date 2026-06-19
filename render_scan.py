@@ -663,13 +663,14 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
     prep_label = f"FDI {sorted(region_teeth)}" if region_teeth else "Prep Region"
 
     # Buccal side: right (cam neg-X) for quadrants 1 & 4; left (cam pos-X) for 2 & 3
+    # Distance multiplied by 1.7 + narrow FOV (telephoto) to avoid fisheye distortion.
     buccal_quads = {t // 10 for t in prep_teeth} if prep_teeth else {1}
     if buccal_quads & {1, 4}:
         buccal_label = 'Arch — Right Buccal'
-        buccal_cam   = (cx - d_arch, cy, cz)
+        buccal_cam   = (cx - d_arch * 1.7, cy, cz)
     else:
         buccal_label = 'Arch — Left Buccal'
-        buccal_cam   = (cx + d_arch, cy, cz)
+        buccal_cam   = (cx + d_arch * 1.7, cy, cz)
 
     # Up vector for prep_occlusal: clinical standard = lingual at top, buccal at bottom.
     # For right-side preps (Q1/Q4): lingual = +X → up = (1, 0, 0)
@@ -715,11 +716,13 @@ def process_scan_folder(folder: str, output_base: str = None) -> dict:
 
     views = [
         # ( key, label, cam_pos, focal, up_vec, fov, hflip, combined, render_size )
+        # Buccal and anterior use a narrow FOV + greater camera distance
+        # (telephoto-style) to avoid wide-angle/fisheye distortion at close range.
         ('buccal', buccal_label,
-         buccal_cam,       (cx, cy, cz),    (0, 0, 1),  40, False,         True,  STD),
+         buccal_cam,       (cx, cy, cz),    (0, 0, 1),  22, False,         True,  STD),
 
         ('anterior', 'Arch — Anterior',
-         (cx, cy-d_arch, cz), (cx, cy, cz), (0, 0, 1),  40, False,         True,  STD),
+         (cx, cy - d_arch * 2.5, cz), (cx, cy, cz), (0, 0, 1),  16, False,         True,  STD),
 
         ('pal_ling', pal_ling_label,
          pal_ling_cam,     (cx, cy, cz),    pal_ling_up, 38, pal_ling_hflip, False, HI),

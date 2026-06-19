@@ -71,7 +71,8 @@ function CameraSetup({ controlsRef }: { controlsRef: React.RefObject<any> }) {
     const cam    = camera as THREE.PerspectiveCamera
     cam.near = size / 100
     cam.far  = size * 10
-    cam.position.set(center.x, center.y - size * 1.0, center.z + size * 0.08)
+    // Narrow FOV (telephoto) + greater distance avoids fisheye/wide-angle distortion
+    cam.position.set(center.x, center.y - size * 1.7, center.z + size * 0.08)
     cam.lookAt(center)
     cam.updateProjectionMatrix()
     if (controlsRef.current) {
@@ -264,7 +265,7 @@ export default function PLYViewer({
       {/* ── Canvas ── */}
       <div style={{ flex: 1 }}>
         <Canvas
-          camera={{ fov: 45, near: 0.1, far: 2000 }}
+          camera={{ fov: 28, near: 0.1, far: 2000 }}
           style={{ background: '#080f1e' }}
           gl={{ antialias: true }}
         >
