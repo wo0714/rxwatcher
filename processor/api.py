@@ -290,9 +290,14 @@ def _process_inbox_zip_core(zip_path: Path) -> dict:
                 'address_key': normalize_address(info['address']) if info['address'] else '',
             }
 
+        # Prefer the practice name freshly parsed from THIS zip's own PDF —
+        # only fall back to whatever was stored at link-time if this one
+        # didn't parse (e.g. the mapping was created before a practice name
+        # was captured, or this particular PDF doesn't match the regex).
+        practice_name = info.get('practice_name') or mapping.get('practice_name', '')
         return _extract_and_process_zip(
             zip_path, mapping['nas_folder'], info,
-            practice_name=mapping.get('practice_name', ''),
+            practice_name=practice_name,
         )
 
     except Exception as e:

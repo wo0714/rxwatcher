@@ -145,6 +145,7 @@ export default function ClinicsPage() {
   const [loading,  setLoading]  = useState(true)
   const [editing,  setEditing]  = useState<Mapping | null>(null)
   const [query,    setQuery]    = useState('')
+  const [selected, setSelected] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     Promise.all([
@@ -161,6 +162,22 @@ export default function ClinicsPage() {
     if (!confirm(`Delete mapping for "${folder}"?\nFuture uploads from this clinic will show the picker again.`)) return
     const res = await fetch(`${API}/clinics/mappings/${id}`, { method: 'DELETE' })
     if (res.ok) setMappings(prev => prev.filter(m => m.id !== id))
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    if (!confirm(`Delete ${ids.length} clinic mapping${ids.length > 1 ? 's' : ''}?\nFuture uploads from these clinics will show the picker again.`)) return
+
+    const results = await Promise.allSettled(
+      ids.map(id => fetch(`${API}/clinics/mappings/${id}`, { method: 'DELETE' }))
+    )
+    const deletedIds = new Set<number>()
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled' && r.value.ok) deletedIds.add(ids[i])
+    })
+    setMappings(prev => prev.filter(m => !deletedIds.has(m.id)))
+    setSelected(new Set())
   }
 
   const handleSave = async (updated: Partial<Mapping>) => {
@@ -190,6 +207,25 @@ export default function ClinicsPage() {
       || m.practice_name?.toLowerCase().includes(q)
       || m.address_key.toLowerCase().includes(q)
   })
+
+  const allSelected = filtered.length > 0 && filtered.every(m => selected.has(m.id))
+
+  const toggleOne = (id: number) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setSelected(prev => {
+      if (allSelected) return new Set()
+      const next = new Set(prev)
+      filtered.forEach(m => next.add(m.id))
+      return next
+    })
+  }
 
   return (
     <>
@@ -223,13 +259,24 @@ export default function ClinicsPage() {
 
       <div className="card" style={{ padding: '20px 0 0' }}>
         <div style={{ padding: '0 20px 16px' }}>
-          <input
-            className="search-input"
-            placeholder="Search by clinic name, folder, or address…"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            style={{ width: '100%', marginBottom: 16 }}
-          />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
+            <input
+              className="search-input"
+              placeholder="Search by clinic name, folder, or address…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            {selected.size > 0 && (
+              <button onClick={handleBulkDelete} style={{
+                background: 'var(--flag)', color: '#fff', border: 'none',
+                borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>
+                🗑 Delete {selected.size} selected
+              </button>
+            )}
+          </div>
 
           {loading ? (
             <div className="empty-state">
@@ -245,6 +292,10 @@ export default function ClinicsPage() {
             <table className="cases-table">
               <thead>
                 <tr>
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                      style={{ cursor: 'pointer' }} />
+                  </th>
                   <th>Practice Name</th>
                   <th>NAS Folder</th>
                   <th>Address Key</th>
@@ -255,6 +306,10 @@ export default function ClinicsPage() {
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.id} style={{ cursor: 'default' }}>
+                    <td onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" checked={selected.has(m.id)}
+                        onChange={() => toggleOne(m.id)} style={{ cursor: 'pointer' }} />
+                    </td>
                     <td style={{ fontWeight: 600 }}>
                       {m.practice_name ||
                         <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>—</span>}

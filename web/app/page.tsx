@@ -46,11 +46,15 @@ function ClinicPicker({
   onDone: (result: any) => void
   onCancel: () => void
 }) {
-  const [folders, setFolders]       = useState<string[]>([])
-  const [search, setSearch]         = useState('')
-  const [selected, setSelected]     = useState('')
-  const [processing, setProcessing] = useState(false)
-  const [error, setError]           = useState('')
+  const [folders, setFolders]         = useState<string[]>([])
+  const [search, setSearch]           = useState('')
+  const [selected, setSelected]       = useState('')
+  const [processing, setProcessing]   = useState(false)
+  const [error, setError]             = useState('')
+  // Pre-filled from the PDF parse, but fully editable — practice names in
+  // the PDF often include extra info (doctor name, DBA suffix) that needs
+  // trimming before it's saved as the permanent clinic mapping label.
+  const [practiceName, setPracticeName] = useState(orderInfo.practice_name || '')
 
   useEffect(() => {
     fetch(`${API}/clinics/folders`).then(r => r.json()).then(setFolders).catch(() => {})
@@ -67,10 +71,10 @@ function ClinicPicker({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          zip_path:      zipPath,
-          nas_folder:    selected,
-          address:       orderInfo.address,
-          practice_name: orderInfo.doctor || '',
+          zip_path:       zipPath,
+          nas_folder:     selected,
+          address:        orderInfo.address,
+          practice_name:  practiceName,
           doctor_license: orderInfo.license || '',
         }),
       })
@@ -105,7 +109,22 @@ function ClinicPicker({
           </div>
           <div style={{ background: 'var(--surface2)', borderRadius: 6, padding: '10px 14px' }}>
             <div><strong>Order:</strong> #{orderInfo.order_id}</div>
-            <div><strong>Patient:</strong> {orderInfo.patient}</div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <strong style={{ whiteSpace: 'nowrap' }}>Practice:</strong>
+              <input
+                value={practiceName}
+                onChange={e => setPracticeName(e.target.value)}
+                placeholder="Practice name (from PDF — edit if needed)"
+                style={{
+                  flex: 1, background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 5, padding: '4px 8px', fontSize: 13,
+                  color: 'var(--text)',
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: 6 }}><strong>Patient:</strong> {orderInfo.patient}</div>
             <div><strong>Doctor:</strong> {orderInfo.doctor}</div>
             <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>
               📍 {orderInfo.address}
@@ -232,7 +251,15 @@ function UploadZone({ onResult }: { onResult: (r: any) => void }) {
         onClick={() => !processing && inputRef.current?.click()}
       >
         <input ref={inputRef} type="file" accept=".zip"
-          onChange={e => e.target.files?.[0] && upload(e.target.files[0])} />
+          onChange={e => {
+            const file = e.target.files?.[0]
+            if (file) upload(file)
+            // Reset so selecting the SAME file again (e.g. after Cancel)
+            // still fires onChange — browsers otherwise suppress the
+            // change event for an identical file selection, which is why
+            // re-uploading silently did nothing until a full page reload.
+            e.target.value = ''
+          }} />
         {processing ? (
           <>
             <div className="spinner" />
@@ -287,6 +314,7 @@ function LatestResult({ result }: { result: any }) {
           <StatusBadge status={q.status ?? result.quality_status} />
         </div>
         <div className="meta-grid">
+          <div className="meta-item"><div className="meta-label">Practice Name</div><div className="meta-value">{result.practice_name || '—'}</div></div>
           <div className="meta-item"><div className="meta-label">Patient</div><div className="meta-value">{o.patient ?? result.patient}</div></div>
           <div className="meta-item"><div className="meta-label">Doctor</div><div className="meta-value">{o.doctor ?? result.doctor}</div></div>
           <div className="meta-item"><div className="meta-label">Clinic</div><div className="meta-value" style={{ fontSize: 12 }}>{o.clinic_address ?? result.clinic_address}</div></div>

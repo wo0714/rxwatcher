@@ -1,12 +1,32 @@
 #!/bin/bash
 # RxWatcher dev startup — runs FastAPI + Next.js simultaneously
 # Usage: ./dev.sh
+#
+# Copyright (c) 2026 Wayne Ohm / YC Lab. All rights reserved.
 
 set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 echo "🦷  RxWatcher dev environment starting…"
 echo ""
+
+# ── Clean up any leftover processes from a previous run ──────────────────────
+# Graceful SIGTERM first (lets Next.js/Turbopack flush its .next cache
+# properly before exiting — a hard kill -9 mid-write is what corrupts the
+# cache and causes "@swc/helpers ... Cannot find module" errors later).
+for PORT in 3010 8000; do
+  PIDS=$(lsof -ti:$PORT 2>/dev/null || true)
+  if [ -n "$PIDS" ]; then
+    echo "$PIDS" | xargs kill 2>/dev/null || true
+  fi
+done
+sleep 1
+for PORT in 3010 8000; do
+  PIDS=$(lsof -ti:$PORT 2>/dev/null || true)
+  if [ -n "$PIDS" ]; then
+    echo "$PIDS" | xargs kill -9 2>/dev/null || true
+  fi
+done
 
 # Check Python venv
 if [ ! -d "$ROOT/.venv" ]; then
@@ -40,6 +60,17 @@ echo ""
 cd "$ROOT/web" && npm run dev -- --port 3010 &
 NEXT_PID=$!
 
-# Clean up both on Ctrl-C
-trap "echo ''; echo 'Shutting down…'; kill $FASTAPI_PID $NEXT_PID 2>/dev/null; exit" INT TERM
+# ── Graceful shutdown on Ctrl-C ───────────────────────────────────────────────
+# SIGTERM first so Next.js/Turbopack can flush its cache cleanly; force-kill
+# after a short grace period only if it hasn't exited on its own.
+cleanup() {
+  echo ''
+  echo 'Shutting down…'
+  kill "$FASTAPI_PID" "$NEXT_PID" 2>/dev/null || true
+  sleep 2
+  kill -9 "$FASTAPI_PID" "$NEXT_PID" 2>/dev/null || true
+  exit
+}
+trap cleanup INT TERM
+
 wait
