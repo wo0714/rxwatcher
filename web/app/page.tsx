@@ -447,17 +447,65 @@ function CaseTable({ cases, onDelete }: { cases: Case[]; onDelete: (id: string) 
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
+// Polls the cases list periodically so cases processed by the background
+// inbox watcher (drop a zip → auto-routed → analyzed) show up without a
+// manual page reload. On detecting a new order_id since the last poll,
+// fetches its full detail and promotes it to "Latest Result".
+const POLL_INTERVAL_MS = 6000
+
 export default function HomePage() {
   const [latestResult, setLatestResult] = useState<any>(null)
   const [cases,        setCases]        = useState<Case[]>([])
+  const knownIds    = useRef<Set<string>>(new Set())
+  const isFirstLoad = useRef(true)
+
+  const refreshCases = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API}/cases`)
+      const data: Case[] = await res.json()
+
+      if (isFirstLoad.current) {
+        isFirstLoad.current = false
+        knownIds.current = new Set(data.map(c => c.order_id))
+        setCases(data)
+        return
+      }
+
+      // New order_ids since the last poll = processed by the inbox watcher
+      // (or by another browser tab) while this page was open.
+      const newOnes = data.filter(c => !knownIds.current.has(c.order_id))
+      knownIds.current = new Set(data.map(c => c.order_id))
+      setCases(data)
+
+      if (newOnes.length > 0) {
+        // /cases is sorted newest-first, so newOnes[0] is the most recent
+        try {
+          const full = await fetch(`${API}/cases/${newOnes[0].order_id}`).then(r => r.json())
+          setLatestResult(full.raw_result ?? full)
+        } catch { /* will show in the table regardless; skip the detail card */ }
+      }
+    } catch {
+      /* network hiccup — just retry on the next poll */
+    }
+  }, [])
 
   useEffect(() => {
-    fetch(`${API}/cases`).then(r => r.json()).then(setCases).catch(() => {})
-  }, [latestResult])
+    refreshCases()
+    const interval = setInterval(refreshCases, POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [refreshCases])
+
+  // Manual upload via the UI — show immediately and mark as known so the
+  // next poll doesn't treat it as "new" again.
+  const handleManualResult = (r: any) => {
+    setLatestResult(r)
+    const id = r.order_id ?? r.order?.id
+    if (id) knownIds.current.add(id)
+  }
 
   return (
     <>
-      <UploadZone onResult={r => setLatestResult(r)} />
+      <UploadZone onResult={handleManualResult} />
       {latestResult && <LatestResult result={latestResult} />}
       <div className="gap-section">
         <div className="section-title">Previous Cases ({cases.length})</div>
